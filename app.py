@@ -94,7 +94,7 @@ st.markdown("""
 st.title("🩺 Gestão de Atendimentos de Enfermagem")
 
 # ---------------------------------------------------------
-# BANCO DE DADOS EM MEMÓRIA & ESTADOS DE FORMULÁRIO
+# BANCO DE DADOS EM MEMÓRIA
 # ---------------------------------------------------------
 if "procedimentos" not in st.session_state:
     st.session_state.procedimentos = {
@@ -106,18 +106,6 @@ if "procedimentos" not in st.session_state:
 
 if "atendimentos" not in st.session_state:
     st.session_state.atendimentos = []
-
-# Chaves de controle para resetar os campos do formulário
-if "input_nome_paciente" not in st.session_state:
-    st.session_state.input_nome_paciente = ""
-
-if "input_procs_sel" not in st.session_state:
-    st.session_state.input_procs_sel = []
-
-# Função para resetar os campos
-def resetar_formulario():
-    st.session_state.input_nome_paciente = ""
-    st.session_state.input_procs_sel = []
 
 # ---------------------------------------------------------
 # NAVEGAÇÃO POR ABAS
@@ -134,34 +122,28 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
     st.subheader("Registrar Atendimento do Paciente")
     
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        data_atend = st.date_input("Data do Atendimento", datetime.now())
-        nome_paciente = st.text_input("Nome do Paciente", key="input_nome_paciente")
-    
-    with col2:
-        opcoes = list(st.session_state.procedimentos.keys())
-        procs_sel = st.multiselect(
-            "Selecione os Procedimentos:", 
-            options=opcoes,
-            key="input_procs_sel",
-            format_func=lambda x: f"{x} - {st.session_state.procedimentos[x]['nome']} (R$ {st.session_state.procedimentos[x]['valor']:.2f})"
-        )
+    # Formulário configurado para LIMPAR TUDO AUTOMATICAMENTE após salvar
+    with st.form("form_atendimento", clear_on_submit=True):
+        col1, col2 = st.columns([1, 2])
         
-        valor_total = sum(st.session_state.procedimentos[p]['valor'] for p in procs_sel)
+        with col1:
+            data_atend = st.date_input("Data do Atendimento", datetime.now())
+            nome_paciente = st.text_input("Nome do Paciente")
         
-        if procs_sel:
-            st.markdown("**Conferência de Valores:**")
-            for sigla in procs_sel:
-                p = st.session_state.procedimentos[sigla]
-                st.write(f"• **{sigla}** ({p['nome']}): R$ {p['valor']:.2f}")
-            st.info(f"💰 **VALOR TOTAL:** R$ {valor_total:.2f}")
+        with col2:
+            opcoes = list(st.session_state.procedimentos.keys())
+            procs_sel = st.multiselect(
+                "Selecione os Procedimentos:", 
+                options=opcoes,
+                format_func=lambda x: f"{x} - {st.session_state.procedimentos[x]['nome']} (R$ {st.session_state.procedimentos[x]['valor']:.2f})"
+            )
 
-    col_btn_salvar, col_btn_novo = st.columns([1, 1])
-    
-    with col_btn_salvar:
-        if st.button("💾 Salvar Atendimento", type="primary", use_container_width=True):
+        btn_salvar = st.form_submit_button("💾 Salvar Atendimento e Cadastrar Novo Paciente", type="primary", use_container_width=True)
+
+        if btn_salvar:
             if nome_paciente and procs_sel:
+                valor_total = sum(st.session_state.procedimentos[p]['valor'] for p in procs_sel)
+                
                 st.session_state.atendimentos.append({
                     "DATA": data_atend.strftime("%d/%m/%Y"),
                     "NOME DO PACIENTE": nome_paciente.upper().strip(),
@@ -169,16 +151,9 @@ with tab1:
                     "VALOR": valor_total,
                     "ITENS": procs_sel
                 })
-                st.success(f"Atendimento de **{nome_paciente.upper()}** registrado com sucesso!")
-                resetar_formulario()
-                st.rerun()
+                st.success(f"✅ Atendimento de **{nome_paciente.upper()}** registrado com sucesso! Os campos foram limpos para o próximo paciente.")
             else:
-                st.error("Preencha o nome do paciente e selecione ao menos um procedimento.")
-
-    with col_btn_novo:
-        if st.button("➕ Cadastrar Novo Paciente (Limpar Campos)", use_container_width=True):
-            resetar_formulario()
-            st.rerun()
+                st.error("⚠️ Preencha o nome do paciente e selecione ao menos um procedimento.")
 
 # ---------------------------------------------------------
 # ABA 2: RELATÓRIO MENSAL, EXPORTAÇÃO EXCEL E IMPRESSÃO
