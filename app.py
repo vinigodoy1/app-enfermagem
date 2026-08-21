@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import io
 from datetime import datetime
 
 # ---------------------------------------------------------
@@ -7,10 +8,8 @@ from datetime import datetime
 # ---------------------------------------------------------
 st.set_page_config(page_title="Gestão de Atendimentos", layout="wide")
 
-# CSS para controlar a impressão física no papel timbrado
 st.markdown("""
     <style>
-        /* Estilos na tela normal */
         .print-header { display: none; }
         .summary-box {
             background-color: #f8fafc;
@@ -30,13 +29,25 @@ st.markdown("""
             text-align: right;
         }
 
-        /* REGRAS DE IMPRESSÃO - PAPEL TIMBRADO (A4) */
+        /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
         @media print {
-            /* Oculta menus, abas, botões e barras laterais do Streamlit */
-            header, footer, .stButton, [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stTabs"] {
+            header, footer, nav, button, .stButton, .stDownloadButton, 
+            [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stTabs"], 
+            iframe, .stAppHeader, .stElementContainer:has(button) {
                 display: none !important;
+                visibility: hidden !important;
             }
-            
+
+            html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
+                background: white !important;
+                color: black !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+
             @page {
                 size: A4 portrait;
                 margin-top: 2.0cm;
@@ -45,14 +56,9 @@ st.markdown("""
                 margin-right: 1.3cm;
             }
 
-            body {
-                font-family: Arial, sans-serif;
-                font-size: 10pt;
-                color: #000;
-                background: #fff;
-            }
-
             .content-container {
+                display: block !important;
+                visibility: visible !important;
                 padding-top: 0.8cm;
                 padding-bottom: 0.8cm;
             }
@@ -70,9 +76,10 @@ st.markdown("""
             }
 
             th, td {
-                border-bottom: 1px solid #ddd !important;
+                border-bottom: 1px solid #000 !important;
                 padding: 6px !important;
                 font-size: 9.5pt !important;
+                color: #000 !important;
             }
 
             .total-banner {
@@ -87,7 +94,7 @@ st.markdown("""
 st.title("🩺 Gestão de Atendimentos de Enfermagem")
 
 # ---------------------------------------------------------
-# BANCO DE DADOS EM MEMÓRIA
+# BANCO DE DADOS EM MEMÓRIA & ESTADOS DE FORMULÁRIO
 # ---------------------------------------------------------
 if "procedimentos" not in st.session_state:
     st.session_state.procedimentos = {
@@ -99,6 +106,18 @@ if "procedimentos" not in st.session_state:
 
 if "atendimentos" not in st.session_state:
     st.session_state.atendimentos = []
+
+# Chaves de controle para resetar os campos do formulário
+if "input_nome_paciente" not in st.session_state:
+    st.session_state.input_nome_paciente = ""
+
+if "input_procs_sel" not in st.session_state:
+    st.session_state.input_procs_sel = []
+
+# Função para resetar os campos
+def resetar_formulario():
+    st.session_state.input_nome_paciente = ""
+    st.session_state.input_procs_sel = []
 
 # ---------------------------------------------------------
 # NAVEGAÇÃO POR ABAS
@@ -118,13 +137,14 @@ with tab1:
     col1, col2 = st.columns([1, 2])
     with col1:
         data_atend = st.date_input("Data do Atendimento", datetime.now())
-        nome_paciente = st.text_input("Nome do Paciente")
+        nome_paciente = st.text_input("Nome do Paciente", key="input_nome_paciente")
     
     with col2:
         opcoes = list(st.session_state.procedimentos.keys())
         procs_sel = st.multiselect(
             "Selecione os Procedimentos:", 
             options=opcoes,
+            key="input_procs_sel",
             format_func=lambda x: f"{x} - {st.session_state.procedimentos[x]['nome']} (R$ {st.session_state.procedimentos[x]['valor']:.2f})"
         )
         
@@ -137,52 +157,77 @@ with tab1:
                 st.write(f"• **{sigla}** ({p['nome']}): R$ {p['valor']:.2f}")
             st.info(f"💰 **VALOR TOTAL:** R$ {valor_total:.2f}")
 
-    if st.button("💾 Salvar Atendimento", type="primary"):
-        if nome_paciente and procs_sel:
-            st.session_state.atendimentos.append({
-                "DATA": data_atend.strftime("%d/%m/%Y"),
-                "NOME DO PACIENTE": nome_paciente.upper().strip(),
-                "PROCEDIMENTO": "/".join(procs_sel),
-                "VALOR": valor_total,
-                "ITENS": procs_sel
-            })
-            st.success(f"Atendimento de **{nome_paciente}** registrado com sucesso!")
-        else:
-            st.error("Preencha o nome do paciente e selecione ao menos um procedimento.")
+    col_btn_salvar, col_btn_novo = st.columns([1, 1])
+    
+    with col_btn_salvar:
+        if st.button("💾 Salvar Atendimento", type="primary", use_container_width=True):
+            if nome_paciente and procs_sel:
+                st.session_state.atendimentos.append({
+                    "DATA": data_atend.strftime("%d/%m/%Y"),
+                    "NOME DO PACIENTE": nome_paciente.upper().strip(),
+                    "PROCEDIMENTO": "/".join(procs_sel),
+                    "VALOR": valor_total,
+                    "ITENS": procs_sel
+                })
+                st.success(f"Atendimento de **{nome_paciente.upper()}** registrado com sucesso!")
+                resetar_formulario()
+                st.rerun()
+            else:
+                st.error("Preencha o nome do paciente e selecione ao menos um procedimento.")
+
+    with col_btn_novo:
+        if st.button("➕ Cadastrar Novo Paciente (Limpar Campos)", use_container_width=True):
+            resetar_formulario()
+            st.rerun()
 
 # ---------------------------------------------------------
-# ABA 2: RELATÓRIO MENSAL, EXCLUSÃO E IMPRESSÃO
+# ABA 2: RELATÓRIO MENSAL, EXPORTAÇÃO EXCEL E IMPRESSÃO
 # ---------------------------------------------------------
 with tab2:
     st.subheader("Relatório Mensal de Atendimentos")
     
     if st.session_state.atendimentos:
-        # Botão para disparar a impressão nativa
-        st.components.v1.html(
-            """
-            <button onclick="window.print()" style="
-                background-color: #28a745;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 5px;
-                cursor: pointer;
-                margin-bottom: 15px;">
-                🖨️ IMPRIMIR EM PAPEL TIMBRADO
-            </button>
-            """,
-            height=60
-        )
+        df_editor = pd.DataFrame(st.session_state.atendimentos)
+        
+        col_btn1, col_btn2 = st.columns([1, 1])
+        
+        with col_btn1:
+            st.components.v1.html(
+                """
+                <button onclick="window.parent.print()" style="
+                    background-color: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    width: 100%;">
+                    🖨️ IMPRIMIR EM PAPEL TIMBRADO
+                </button>
+                """,
+                height=50
+            )
+            
+        with col_btn2:
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_editor[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]].to_excel(writer, index=False, sheet_name='Atendimentos')
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📊 BAIXAR TABELA EM EXCEL (.XLSX)",
+                data=buffer,
+                file_name=f"relatorio_atendimentos_{datetime.now().strftime('%m_%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         
         st.markdown("---")
         
-        # Gerenciamento de Duplicados (Edição/Exclusão)
         st.markdown("### ✏️ Gerenciar e Excluir Registros Duplicados")
-        df_editor = pd.DataFrame(st.session_state.atendimentos)
         
-        # Exibe a tabela interativa onde a enfermeira/administrador pode apagar linhas
         df_atualizado = st.data_editor(
             df_editor[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]],
             num_rows="dynamic",
@@ -190,19 +235,14 @@ with tab2:
             key="editor_atendimentos"
         )
         
-        # Atualiza a lista interna com base na tabela editada
         if st.button("🔄 Atualizar Totais após Exclusões"):
             st.session_state.atendimentos = df_atualizado.to_dict("records")
             st.rerun()
 
         st.markdown("---")
         
-        # ---------------------------------------------------------
-        # ÁREA DE IMPRESSÃO (Visível na tela e na folha impressa)
-        # ---------------------------------------------------------
         st.markdown('<div class="content-container">', unsafe_allow_html=True)
         
-        # Cabeçalho do Relatório
         st.markdown("""
             <div class="print-header">
                 <h2>RELATÓRIO MENSAL DE ATENDIMENTOS</h2>
@@ -210,21 +250,15 @@ with tab2:
             </div>
         """, unsafe_allow_html=True)
 
-        # Tabela Final
         st.table(df_atualizado)
 
-        # ---------------------------------------------------------
-        # DECOMPOSIÇÃO E CAMPOS DE TOTAIS
-        # ---------------------------------------------------------
         total_pacientes = len(df_atualizado)
         valor_total_geral = df_atualizado["VALOR"].sum() if not df_atualizado.empty else 0.0
         
-        # Contagem e Soma por Procedimento Individual
         contagem_procs = {}
         soma_procs = {}
         
         for record in st.session_state.atendimentos:
-            # Obtém itens salvos ou decompõe a sigla
             itens = record.get("ITENS")
             if not itens and isinstance(record.get("PROCEDIMENTO"), str):
                 itens = record["PROCEDIMENTO"].split("/")
@@ -240,7 +274,6 @@ with tab2:
                 contagem_procs[chave] = contagem_procs.get(chave, 0) + 1
                 soma_procs[chave] = soma_procs.get(chave, 0.0) + val
 
-        # Quadro de Resumo
         st.markdown('<div class="summary-box">', unsafe_allow_html=True)
         st.markdown("### 📊 RESUMO DE FECHAMENTO MENSAL")
         st.write(f"• **TOTAL DE PACIENTES ATENDIDOS:** {total_pacientes} Pacientes")
@@ -251,8 +284,6 @@ with tab2:
             for proc_nome, qtd in contagem_procs.items():
                 val_subtotal = soma_procs[proc_nome]
                 st.write(f"• **{qtd}x** {proc_nome}: **R$ {val_subtotal:.2f}**")
-        else:
-            st.write("Sem detalhamento disponível.")
 
         st.markdown(f'<div class="total-banner">VALOR TOTAL A RECEBER: R$ {valor_total_geral:.2f}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
