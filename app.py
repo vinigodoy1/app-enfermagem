@@ -122,13 +122,13 @@ st.markdown("""
             body > div:not(.print-container-root) { display: none !important; }
             .print-container-root {
                 display: block !important; width: 100% !important; box-sizing: border-box !important;
-                padding-top: 1.5cm !important; padding-bottom: 1.5cm !important;
+                padding-top: 1.2cm !important; padding-bottom: 1.2cm !important;
                 padding-left: 1.3cm !important; padding-right: 1.3cm !important;
             }
             .header-timbrado { display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid #0056b3 !important; padding-bottom: 10px !important; margin-bottom: 15px !important; }
-            .header-timbrado img { max-height: 75px !important; }
+            .header-timbrado img { max-height: 130px !important; }
             .header-info { text-align: right !important; font-family: Arial, sans-serif !important; font-size: 8.5pt !important; color: #333 !important; line-height: 1.3 !important; }
-            .header-info strong { font-size: 10pt !important; color: #000 !important; }
+            .header-info strong { font-size: 10.5pt !important; color: #000 !important; }
             
             table.print-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 15px !important; }
             table.print-table th, table.print-table td { border-bottom: 1px solid #000 !important; padding: 5px 7px !important; font-size: 9pt !important; color: #000 !important; text-align: left !important; font-family: Arial, sans-serif !important; }
@@ -137,7 +137,7 @@ st.markdown("""
             .summary-box-print { border: 1px solid #000 !important; padding: 10px !important; margin-top: 10px !important; background-color: #fff !important; font-family: Arial, sans-serif !important; font-size: 9pt !important; }
             .total-banner-print { background-color: #f0f0f0 !important; color: #000 !important; border: 1px solid #000 !important; padding: 8px !important; font-weight: bold !important; text-align: right !important; margin-top: 8px !important; font-size: 10.5pt !important; }
             
-            .footer-timbrado { border-top: 1px solid #ccc !important; padding-top: 8px !important; margin-top: 25px !important; text-align: center !important; font-family: Arial, sans-serif !important; font-size: 8pt !important; color: #555 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; }
+            .footer-timbrado { border-top: 1px solid #ccc !important; padding-top: 8px !important; margin-top: 25px !important; text-align: center !important; font-family: Arial, sans-serif !important; font-size: 8.5pt !important; color: #555 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; }
             .footer-timbrado img { max-height: 14px !important; vertical-align: middle !important; }
         }
     </style>
@@ -153,9 +153,9 @@ if not st.session_state.autenticado:
     col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
     with col_l2:
         if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, use_container_width=True)
-        st.markdown("<h2 style='text-align: center;'>🔐 Acesso ao Sistema</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
+            st.image(LOGO_PATH, width=130)
+        st.markdown("<h3 style='text-align: center; margin-top: 5px; margin-bottom: 0px;'>🔐 Acesso ao Sistema</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 14px; color: #666;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
         
         with st.form("form_login"):
             senha_login = st.text_input("Digite sua Senha de Acesso:", type="password")
@@ -173,10 +173,10 @@ if not st.session_state.autenticado:
 # ---------------------------------------------------------
 # SISTEMA AUTENTICADO
 # ---------------------------------------------------------
-col_h1, col_h2 = st.columns([1, 4])
+col_h1, col_h2 = st.columns([1, 3])
 with col_h1:
     if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=130)
+        st.image(LOGO_PATH, width=280)
 with col_h2:
     st.title("📋 Relatório Mensal para Prefeituras")
 
@@ -189,9 +189,6 @@ st.sidebar.markdown("---")
 # ---------------------------------------------------------
 # SELETOR DE RELATÓRIO ATIVO
 # ---------------------------------------------------------
-if os.path.exists(LOGO_PATH):
-    st.sidebar.image(LOGO_PATH, use_container_width=True)
-
 st.sidebar.header("📁 Gestão de Relatórios")
 
 relatorios_lista = run_query("SELECT id, nome, municipio, mes_ano, status FROM relatorios ORDER BY id DESC")
@@ -432,8 +429,6 @@ with tab2:
 
                 <div class="footer-timbrado">
                     <div>{insta_tag} @clinicadrjorgemendonca</div>
-                    <div>|</div>
-                    <div>🕒 Horários: Seg: 7h30 às 17h30 | Ter: 7h às 17h30 | Quarta a Sexta: 8h às 17h30</div>
                 </div>
             </div>
             """
