@@ -4,6 +4,8 @@ import sqlite3
 import io
 import json
 import hashlib
+import os
+import base64
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -11,17 +13,24 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # CONFIGURAÇÃO DE BANCO DE DADOS & SENHAS
 # ---------------------------------------------------------
 DB_FILE = "banco_prefeituras.db"
-# Hash SHA-256 EXATO da Senha Mestra: vi753951
 HASH_SENHA_MESTRA = "288e5b1e88621463b8fba4c50b3081d02801fba46012f97e02533636757963ee"
+LOGO_PATH = "logo.png"
+INSTAGRAM_ICON_PATH = "instagram.png"
 
 def hash_senha(senha):
     return hashlib.sha256(senha.strip().encode('utf-8')).hexdigest()
+
+def get_base64_image(image_path):
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    return ""
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Tabela de Configurações / Senha do Usuário
     c.execute("""
         CREATE TABLE IF NOT EXISTS config (
             chave TEXT PRIMARY KEY,
@@ -29,12 +38,10 @@ def init_db():
         )
     """)
     
-    # Define senha padrão do usuário '1234' se não existir
     c.execute("SELECT COUNT(*) FROM config WHERE chave = 'senha_admin'")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO config VALUES ('senha_admin', ?)", (hash_senha("1234"),))
 
-    # Tabela de Procedimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS procedimentos (
             sigla TEXT PRIMARY KEY,
@@ -53,7 +60,6 @@ def init_db():
         ]
         c.executemany("INSERT INTO procedimentos VALUES (?, ?, ?)", procs_iniciais)
 
-    # Tabela de Relatórios
     c.execute("""
         CREATE TABLE IF NOT EXISTS relatorios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +70,6 @@ def init_db():
         )
     """)
 
-    # Tabela de Atendimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS atendimentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +101,6 @@ def verificar_senha(senha_digitada):
         return False
     
     hash_digitado = hash_senha(senha_digitada)
-    # Valida tanto a senha mestra quanto a senha do usuário
     if hash_digitado == HASH_SENHA_MESTRA:
         return True
         
@@ -104,7 +108,7 @@ def verificar_senha(senha_digitada):
     return hash_digitado == senha_salva
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PÁGINA E CSS DE IMPRESSÃO
+# CONFIGURAÇÃO DE PÁGINA E CSS
 # ---------------------------------------------------------
 st.set_page_config(page_title="Relatório Mensal para Prefeituras", layout="wide")
 
@@ -118,14 +122,23 @@ st.markdown("""
             body > div:not(.print-container-root) { display: none !important; }
             .print-container-root {
                 display: block !important; width: 100% !important; box-sizing: border-box !important;
-                padding-top: 2.0cm !important; padding-bottom: 2.0cm !important;
+                padding-top: 1.5cm !important; padding-bottom: 1.5cm !important;
                 padding-left: 1.3cm !important; padding-right: 1.3cm !important;
             }
-            table.print-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 20px !important; }
-            table.print-table th, table.print-table td { border-bottom: 1px solid #000 !important; padding: 6px 8px !important; font-size: 9.5pt !important; color: #000 !important; text-align: left !important; font-family: Arial, sans-serif !important; }
+            .header-timbrado { display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid #0056b3 !important; padding-bottom: 10px !important; margin-bottom: 15px !important; }
+            .header-timbrado img { max-height: 75px !important; }
+            .header-info { text-align: right !important; font-family: Arial, sans-serif !important; font-size: 8.5pt !important; color: #333 !important; line-height: 1.3 !important; }
+            .header-info strong { font-size: 10pt !important; color: #000 !important; }
+            
+            table.print-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 15px !important; }
+            table.print-table th, table.print-table td { border-bottom: 1px solid #000 !important; padding: 5px 7px !important; font-size: 9pt !important; color: #000 !important; text-align: left !important; font-family: Arial, sans-serif !important; }
             table.print-table th { background-color: #f0f0f0 !important; font-weight: bold !important; }
-            .summary-box-print { border: 1px solid #000 !important; padding: 10px !important; margin-top: 15px !important; background-color: #fff !important; font-family: Arial, sans-serif !important; font-size: 9.5pt !important; }
-            .total-banner-print { background-color: #f0f0f0 !important; color: #000 !important; border: 1px solid #000 !important; padding: 8px !important; font-weight: bold !important; text-align: right !important; margin-top: 10px !important; font-size: 11pt !important; }
+            
+            .summary-box-print { border: 1px solid #000 !important; padding: 10px !important; margin-top: 10px !important; background-color: #fff !important; font-family: Arial, sans-serif !important; font-size: 9pt !important; }
+            .total-banner-print { background-color: #f0f0f0 !important; color: #000 !important; border: 1px solid #000 !important; padding: 8px !important; font-weight: bold !important; text-align: right !important; margin-top: 8px !important; font-size: 10.5pt !important; }
+            
+            .footer-timbrado { border-top: 1px solid #ccc !important; padding-top: 8px !important; margin-top: 25px !important; text-align: center !important; font-family: Arial, sans-serif !important; font-size: 8pt !important; color: #555 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; }
+            .footer-timbrado img { max-height: 14px !important; vertical-align: middle !important; }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -137,11 +150,13 @@ if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-    st.markdown("<h2 style='text-align: center;'>🔐 Acesso ao Sistema</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
-    
     col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
     with col_l2:
+        if os.path.exists(LOGO_PATH):
+            st.image(LOGO_PATH, use_container_width=True)
+        st.markdown("<h2 style='text-align: center;'>🔐 Acesso ao Sistema</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
+        
         with st.form("form_login"):
             senha_login = st.text_input("Digite sua Senha de Acesso:", type="password")
             btn_login = st.form_submit_button("🔑 Entrar no Sistema", type="primary", use_container_width=True)
@@ -158,7 +173,12 @@ if not st.session_state.autenticado:
 # ---------------------------------------------------------
 # SISTEMA AUTENTICADO
 # ---------------------------------------------------------
-st.title("📋 Relatório Mensal para Prefeituras")
+col_h1, col_h2 = st.columns([1, 4])
+with col_h1:
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=130)
+with col_h2:
+    st.title("📋 Relatório Mensal para Prefeituras")
 
 if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
     st.session_state.autenticado = False
@@ -169,6 +189,9 @@ st.sidebar.markdown("---")
 # ---------------------------------------------------------
 # SELETOR DE RELATÓRIO ATIVO
 # ---------------------------------------------------------
+if os.path.exists(LOGO_PATH):
+    st.sidebar.image(LOGO_PATH, use_container_width=True)
+
 st.sidebar.header("📁 Gestão de Relatórios")
 
 relatorios_lista = run_query("SELECT id, nome, municipio, mes_ano, status FROM relatorios ORDER BY id DESC")
@@ -177,14 +200,13 @@ opcoes_rel = {}
 for r in relatorios_lista:
     r_id, r_nome, r_muni, r_mes_ano, r_status = r
     label_formatado = f"📅 {r_mes_ano} — {r_muni} — {r_nome} [{r_status}]"
-    opcoes_rel[label_formatado] = (r_id, r_status)
+    opcoes_rel[label_formatado] = (r_id, r_status, r_nome, r_muni, r_mes_ano)
 
-opcoes_rel["➕ Criar Novo Relatório"] = (-1, "Novo")
+opcoes_rel["➕ Criar Novo Relatório"] = (-1, "Novo", "", "", "")
 
 relatorio_selecionado = st.sidebar.selectbox("Selecione o Relatório Ativo:", options=list(opcoes_rel.keys()))
-relatorio_id_atual, status_atual = opcoes_rel[relatorio_selecionado]
+relatorio_id_atual, status_atual, nome_rel_atual, muni_rel_atual, mes_ano_rel_atual = opcoes_rel[relatorio_selecionado]
 
-# Travar / Reabrir / Excluir Relatórios
 if relatorio_id_atual != -1:
     st.sidebar.markdown("---")
     if status_atual == "Em Aberto":
@@ -358,8 +380,32 @@ with tab2:
                 v_sub_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 detalhes_print_html += f"<div>• <strong>{qtd}x</strong> {proc_nome}: {v_sub_fmt}</div>"
 
+            logo_b64 = get_base64_image(LOGO_PATH)
+            insta_b64 = get_base64_image(INSTAGRAM_ICON_PATH)
+            
+            img_tag = f'<img src="data:image/png;base64,{logo_b64}">' if logo_b64 else '<h2>CLÍNICA DE OLHOS</h2>'
+            insta_tag = f'<img src="data:image/png;base64,{insta_b64}">' if insta_b64 else '📷'
+
             documento_impressao_html = f"""
             <div class="print-container-root">
+                <div class="header-timbrado">
+                    <div>
+                        {img_tag}
+                    </div>
+                    <div class="header-info">
+                        <strong>Clínica e Cirurgia de Olhos Dr. Jorge Mendonça</strong><br>
+                        Rua Caetano Paludetto, 120 - Chácara Peixe<br>
+                        Santa Cruz do Rio Pardo - SP | CEP 18900-000<br>
+                        📞 (14) 3372-7332 | 📱 WhatsApp: (14) 99642-7332<br>
+                        ✉️ clinicadeolhosscrp@hotmail.com
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px; font-family: Arial, sans-serif;">
+                    <h3 style="margin: 0; font-size: 13pt; color: #0056b3;">{nome_rel_atual.upper()}</h3>
+                    <div style="font-size: 10pt; color: #444;"><strong>Prefeitura / Município:</strong> {muni_rel_atual} | <strong>Mês/Ano:</strong> {mes_ano_rel_atual}</div>
+                </div>
+
                 <table class="print-table">
                     <thead>
                         <tr>
@@ -373,6 +419,7 @@ with tab2:
                         {linhas_print_html}
                     </tbody>
                 </table>
+
                 <div class="summary-box-print">
                     <strong>RESUMO DE FECHAMENTO MENSAL</strong><br>
                     • <strong>TOTAL DE PACIENTES ATENDIDOS:</strong> {total_pacientes} Pacientes<br><br>
@@ -381,6 +428,12 @@ with tab2:
                     <div class="total-banner-print">
                         VALOR TOTAL A RECEBER: {val_total_fmt}
                     </div>
+                </div>
+
+                <div class="footer-timbrado">
+                    <div>{insta_tag} @clinicadrjorgemendonca</div>
+                    <div>|</div>
+                    <div>🕒 Horários: Seg: 7h30 às 17h30 | Ter: 7h às 17h30 | Quarta a Sexta: 8h às 17h30</div>
                 </div>
             </div>
             """
@@ -394,7 +447,7 @@ with tab2:
                     background-color: #28a745; color: white; border: none;
                     padding: 12px 20px; font-size: 16px; font-weight: bold;
                     border-radius: 5px; cursor: pointer; width: 100%;">
-                    🖨️ IMPRIMIR EM PAPEL TIMBRADO
+                    🖨️ IMPRIMIR EM PAPEL TIMBRADO PRÓPRIO
                 </button>
                 <script>
                 function imprimirPapelTimbrado() {{
