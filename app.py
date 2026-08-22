@@ -8,9 +8,10 @@ from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE BANCO DE DADOS (SQLITE)
+# CONFIGURAÇÃO DE BANCO DE DADOS & SENHAS
 # ---------------------------------------------------------
 DB_FILE = "banco_prefeituras.db"
+HASH_SENHA_MESTRA = "f86bebf436c6ad97c9b20755ecfb8a9d020d5884c9809087c536c073a4661858"
 
 def hash_senha(senha):
     return hashlib.sha256(senha.encode('utf-8')).hexdigest()
@@ -19,7 +20,6 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Tabela de Configurações / Senha
     c.execute("""
         CREATE TABLE IF NOT EXISTS config (
             chave TEXT PRIMARY KEY,
@@ -27,12 +27,10 @@ def init_db():
         )
     """)
     
-    # Define senha padrão '1234' se não existir
     c.execute("SELECT COUNT(*) FROM config WHERE chave = 'senha_admin'")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO config VALUES ('senha_admin', ?)", (hash_senha("1234"),))
 
-    # Tabela de Procedimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS procedimentos (
             sigla TEXT PRIMARY KEY,
@@ -51,7 +49,6 @@ def init_db():
         ]
         c.executemany("INSERT INTO procedimentos VALUES (?, ?, ?)", procs_iniciais)
 
-    # Tabela de Relatórios
     c.execute("""
         CREATE TABLE IF NOT EXISTS relatorios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +59,6 @@ def init_db():
         )
     """)
 
-    # Tabela de Atendimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS atendimentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,8 +86,11 @@ def run_query(query, params=(), fetchall=True):
     return res
 
 def verificar_senha(senha_digitada):
+    hash_digitado = hash_senha(senha_digitada)
+    if hash_digitado == HASH_SENHA_MESTRA:
+        return True
     senha_salva = run_query("SELECT valor FROM config WHERE chave = 'senha_admin'")[0][0]
-    return hash_senha(senha_digitada) == senha_salva
+    return hash_digitado == senha_salva
 
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA E CSS
@@ -120,7 +119,42 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ---------------------------------------------------------
+# TELA DE LOGIN GLOBAL
+# ---------------------------------------------------------
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    st.markdown("<h2 style='text-align: center;'>🔐 Acesso ao Sistema</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
+    
+    col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
+    with col_l2:
+        with st.form("form_login"):
+            senha_login = st.text_input("Digite sua Senha de Acesso:", type="password")
+            btn_login = st.form_submit_button("🔑 Entrar no Sistema", type="primary", use_container_width=True)
+            
+            if btn_login:
+                if verificar_senha(senha_login):
+                    st.session_state.autenticado = True
+                    st.success("Acesso liberado!")
+                    st.rerun()
+                else:
+                    st.error("❌ Senha incorreta. Tente novamente.")
+    st.stop()
+
+# ---------------------------------------------------------
+# SISTEMA AUTENTICADO
+# ---------------------------------------------------------
 st.title("📋 Relatório Mensal para Prefeituras")
+
+# Botão de Logout na Barra Lateral
+if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
+    st.session_state.autenticado = False
+    st.rerun()
+
+st.sidebar.markdown("---")
 
 # ---------------------------------------------------------
 # SELETOR DE RELATÓRIO ATIVO
@@ -140,7 +174,7 @@ opcoes_rel["➕ Criar Novo Relatório"] = (-1, "Novo")
 relatorio_selecionado = st.sidebar.selectbox("Selecione o Relatório Ativo:", options=list(opcoes_rel.keys()))
 relatorio_id_atual, status_atual = opcoes_rel[relatorio_selecionado]
 
-# Travar / Reabrir / Excluir Relatórios com Senha na Barra Lateral (se houver relatório selecionado)
+# Travar / Reabrir / Excluir Relatórios
 if relatorio_id_atual != -1:
     st.sidebar.markdown("---")
     if status_atual == "Em Aberto":
@@ -159,7 +193,7 @@ if relatorio_id_atual != -1:
     else:
         st.sidebar.info("🔒 Relatório Finalizado (Valores Travados)")
         with st.sidebar.expander("🔓 Reabrir Relatório"):
-            senha_reabrir = st.text_input("Senha do Administrador:", type="password", key="pass_reabrir")
+            senha_reabrir = st.text_input("Senha para Confirmar:", type="password", key="pass_reabrir")
             if st.button("Confirmar Reabertura"):
                 if verificar_senha(senha_reabrir):
                     run_query("UPDATE relatorios SET status = 'Em Aberto' WHERE id = ?", (relatorio_id_atual,), fetchall=False)
@@ -168,9 +202,8 @@ if relatorio_id_atual != -1:
                 else:
                     st.error("Senha incorreta!")
 
-    # Exclusão Protegida de Relatório
     with st.sidebar.expander("🗑️ Excluir este Relatório"):
-        senha_excluir = st.text_input("Senha do Administrador:", type="password", key="pass_excluir")
+        senha_excluir = st.text_input("Senha para Confirmar:", type="password", key="pass_excluir")
         if st.button("Confirmar Exclusão Permanente", type="primary"):
             if verificar_senha(senha_excluir):
                 run_query("DELETE FROM relatorios WHERE id = ?", (relatorio_id_atual,), fetchall=False)
@@ -179,11 +212,11 @@ if relatorio_id_atual != -1:
             else:
                 st.error("Senha incorreta!")
 
-# Obtém dados atualizados dos procedimentos
+# Obtém procedimentos cadastrados
 procs_raw = run_query("SELECT sigla, nome, valor FROM procedimentos")
 procedimentos_dict = {p[0]: {"nome": p[1], "valor": p[2]} for p in procs_raw}
 
-# Estrutura principal de abas (SEMPRE VISÍVEIS)
+# Estrutura principal de abas
 tab1, tab2, tab3, tab4 = st.tabs([
     "📋 Novo Atendimento", 
     "🖨️ Relatório Mensal & Impressão", 
@@ -198,7 +231,7 @@ with tab1:
     st.subheader("Registrar Atendimento do Paciente")
     
     if relatorio_id_atual == -1:
-        st.info("💡 Crie um novo relatório na caixa abaixo para começar a cadastrar os atendimentos.")
+        st.info("💡 Crie um novo relatório para começar a cadastrar os atendimentos.")
         with st.form("form_novo_relatorio"):
             novo_nome = st.text_input("Nome do Relatório (ex: Fechamento Oftalmologia)")
             novo_municipio = st.text_input("Município / Prefeitura")
@@ -213,7 +246,7 @@ with tab1:
                 else:
                     st.warning("Preencha todos os campos do relatório.")
     elif status_atual == "Finalizado":
-        st.warning("🔒 Este relatório está finalizado. Digite a senha no menu lateral para reabri-lo.")
+        st.warning("🔒 Este relatório está finalizado. Reabra-o na barra lateral para adicionar novos pacientes.")
     else:
         with st.form("form_atendimento", clear_on_submit=True):
             col1, col2 = st.columns([1, 2])
@@ -253,7 +286,7 @@ with tab2:
     st.subheader("Relatório Mensal de Atendimentos")
     
     if relatorio_id_atual == -1:
-        st.info("💡 Selecione um relatório criado na barra lateral ou crie um novo para visualizar o extrato.")
+        st.warning("⚠️ Nenhum relatório selecionado. Escolha um relatório criado na barra lateral ou crie um novo para visualizar este extrato.")
     else:
         atendimentos_raw = run_query("SELECT id, data, paciente, procedimentos, valor_historico FROM atendimentos WHERE relatorio_id = ?", (relatorio_id_atual,))
         
@@ -487,7 +520,7 @@ with tab4:
     st.subheader("🔑 Alterar Senha de Segurança")
     
     with st.form("form_alterar_senha"):
-        senha_atual_in = st.text_input("Digite a Senha Atual:", type="password")
+        senha_atual_in = st.text_input("Digite a Senha Atual (ou Senha Mestra):", type="password")
         nova_senha_in = st.text_input("Digite a Nova Senha:", type="password")
         confirma_senha_in = st.text_input("Confirme a Nova Senha:", type="password")
         
@@ -499,4 +532,4 @@ with tab4:
                 else:
                     st.error("⚠️ A nova senha e a confirmação não coincidem ou estão em branco.")
             else:
-                st.error("❌ A senha atual informada está incorreta.")
+                st.error("❌ A senha atual informada é inválida.")
