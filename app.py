@@ -99,12 +99,20 @@ st.markdown("""
 st.title("📋 Relatório Mensal para Prefeituras")
 
 # ---------------------------------------------------------
-# SELETOR DE RELATÓRIO ATIVO E CONTROLE DE STATUS
+# SELETOR DE RELATÓRIO ATIVO (IDENTIFICAÇÃO POR MÊS/ANO)
 # ---------------------------------------------------------
 st.sidebar.header("📁 Gestão de Relatórios")
+
+# Ordena priorizando os relatórios mais recentes por Mês/Ano e ID
 relatorios_lista = run_query("SELECT id, nome, municipio, mes_ano, status FROM relatorios ORDER BY id DESC")
 
-opcoes_rel = {f"{r[1]} - {r[2]} ({r[3]}) [{r[4]}]": (r[0], r[4]) for r in relatorios_lista}
+opcoes_rel = {}
+for r in relatorios_lista:
+    r_id, r_nome, r_muni, r_mes_ano, r_status = r
+    # Formatação com Mês/Ano em destaque inicial
+    label_formatado = f"📅 {r_mes_ano} — {r_muni} — {r_nome} [{r_status}]"
+    opcoes_rel[label_formatado] = (r_id, r_status)
+
 opcoes_rel["➕ Criar Novo Relatório"] = (-1, "Novo")
 
 relatorio_selecionado = st.sidebar.selectbox("Selecione o Relatório Ativo:", options=list(opcoes_rel.keys()))
@@ -131,7 +139,6 @@ else:
     st.sidebar.markdown("---")
     if status_atual == "Em Aberto":
         if st.sidebar.button("🔒 Finalizar e Travar Relatório", type="primary", use_container_width=True):
-            # Congela os valores atuais na coluna valor_historico
             procs_raw = run_query("SELECT sigla, valor FROM procedimentos")
             p_dict = {p[0]: p[1] for p in procs_raw}
             
@@ -208,7 +215,6 @@ else:
         atendimentos_raw = run_query("SELECT id, data, paciente, procedimentos, valor_historico FROM atendimentos WHERE relatorio_id = ?", (relatorio_id_atual,))
         
         if atendimentos_raw:
-            # Calcula valor dinâmico se estiver 'Em Aberto', ou usa o histórico congelado se 'Finalizado'
             dados_processados = []
             for a_id, dt, pac, proc_str, val_hist in atendimentos_raw:
                 if status_atual == "Finalizado" and val_hist is not None:
