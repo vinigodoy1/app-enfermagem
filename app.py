@@ -153,7 +153,15 @@ if not st.session_state.autenticado:
     col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
     with col_l2:
         if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, width=130)
+            logo_b64_login = get_base64_image(LOGO_PATH)
+            st.markdown(
+                f"""
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <img src="data:image/png;base64,{logo_b64_login}" style="width: 130px; height: auto;">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         st.markdown("<h3 style='text-align: center; margin-top: 5px; margin-bottom: 0px;'>🔐 Acesso ao Sistema</h3>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; font-size: 14px; color: #666;'>Relatório Mensal para Prefeituras</p>", unsafe_allow_html=True)
         
