@@ -29,14 +29,20 @@ st.markdown("""
             text-align: right;
         }
 
-        /* REGRAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
+        /* Oculta a área de impressão da tela normal do computador */
+        .print-area { display: none; }
+
+        /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
         @media print {
+            /* Esconde absolutamente toda a interface web do Streamlit */
             header, footer, nav, button, .stButton, .stDownloadButton, 
             [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stTabs"], 
-            iframe, .stAppHeader, .stElementContainer, h1, h2, h3, .stMarkdown {
+            iframe, .stAppHeader, .stElementContainer, h1, h2, h3, .stMarkdown, .main {
                 display: none !important;
+                visibility: hidden !important;
             }
 
+            /* Força a exibição da área reservada para o papel timbrado */
             .print-area, .print-area * {
                 display: block !important;
                 visibility: visible !important;
@@ -50,7 +56,7 @@ st.markdown("""
             }
 
             @page {
-                size: A4 portrait;
+                size: A4 portrait; /* A4 Vertical */
                 margin-top: 2.0cm;
                 margin-bottom: 2.0cm;
                 margin-left: 1.3cm;
@@ -93,8 +99,6 @@ st.markdown("""
                 margin-top: 10px !important;
             }
         }
-
-        .print-area { display: none; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -201,7 +205,6 @@ with tab2:
             key="editor_atendimentos"
         )
 
-        # Sincronização automática em tempo real na memória
         novos_dados = df_atualizado.to_dict("records")
         if novos_dados != st.session_state.atendimentos:
             salvar_estado_historico()
@@ -231,14 +234,24 @@ with tab2:
         col_btn1, col_btn2 = st.columns([1, 1])
         
         with col_btn1:
-            st.markdown("""
-                <button onclick="window.print()" style="
-                    background-color: #28a745; color: white; border: none;
-                    padding: 12px 20px; font-size: 16px; font-weight: bold;
-                    border-radius: 5px; cursor: pointer; width: 100%;">
+            # Componente de Impressão Direta usando Comunicação JavaScript com a Janela Pai
+            st.components.v1.html(
+                """
+                <button onclick="window.parent.print()" style="
+                    background-color: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 12px 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    width: 100%;">
                     🖨️ IMPRIMIR EM PAPEL TIMBRADO
                 </button>
-            """, unsafe_allow_html=True)
+                """,
+                height=60
+            )
             
         with col_btn2:
             buffer = io.BytesIO()
@@ -335,7 +348,7 @@ with tab2:
         st.markdown('</div>', unsafe_allow_html=True)
 
         # ---------------------------------------------------------
-        # ESTRUTURA EXCLUSIVA PARA A IMPRESSÃO
+        # ESTRUTURA EXCLUSIVA PARA A IMPRESSÃO (Nativa HTML)
         # ---------------------------------------------------------
         linhas_html = ""
         for _, row in df_final.iterrows():
