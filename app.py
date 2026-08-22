@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import json
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -29,34 +30,20 @@ st.markdown("""
             text-align: right;
         }
 
-        /* Oculta a área de impressão da tela normal do computador */
-        .print-area { display: none; }
-
         /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
         @media print {
-            /* Esconde absolutamente toda a interface web do Streamlit */
-            header, footer, nav, button, .stButton, .stDownloadButton, 
-            [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stTabs"], 
-            iframe, .stAppHeader, .stElementContainer, h1, h2, h3, .stMarkdown, .main {
+            /* Oculta tudo que pertence ao Streamlit */
+            body > div:not(.print-container-root) {
                 display: none !important;
-                visibility: hidden !important;
             }
 
-            /* Força a exibição da área reservada para o papel timbrado */
-            .print-area, .print-area * {
+            .print-container-root {
                 display: block !important;
-                visibility: visible !important;
-            }
-
-            .print-area {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
                 width: 100% !important;
             }
 
             @page {
-                size: A4 portrait; /* A4 Vertical */
+                size: A4 portrait;
                 margin-top: 2.0cm;
                 margin-bottom: 2.0cm;
                 margin-left: 1.3cm;
@@ -75,6 +62,7 @@ st.markdown("""
                 font-size: 9.5pt !important;
                 color: #000 !important;
                 text-align: left !important;
+                font-family: Arial, sans-serif !important;
             }
 
             table.print-table th {
@@ -87,6 +75,8 @@ st.markdown("""
                 padding: 10px !important;
                 margin-top: 15px !important;
                 background-color: #fff !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 9.5pt !important;
             }
 
             .total-banner-print {
@@ -97,6 +87,7 @@ st.markdown("""
                 font-weight: bold !important;
                 text-align: right !important;
                 margin-top: 10px !important;
+                font-size: 11pt !important;
             }
         }
     </style>
@@ -230,28 +221,80 @@ with tab2:
                 contagem_procs[chave] = contagem_procs.get(chave, 0) + 1
                 soma_procs[chave] = soma_procs.get(chave, 0.0) + val
 
+        # Montagem do HTML limpo para a Impressão em Papel Timbrado
+        val_total_fmt = f"R$ {valor_total_geral:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        linhas_print_html = ""
+        for _, row in df_final.iterrows():
+            v_fmt = f"R$ {row['VALOR']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            linhas_print_html += f"<tr><td>{row['DATA']}</td><td>{row['NOME DO PACIENTE']}</td><td>{row['PROCEDIMENTO']}</td><td style='text-align: right;'>{v_fmt}</td></tr>"
+
+        detalhes_print_html = ""
+        for proc_nome, qtd in contagem_procs.items():
+            val_subtotal = soma_procs[proc_nome]
+            v_sub_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            detalhes_print_html += f"<div>• <strong>{qtd}x</strong> {proc_nome}: {v_sub_fmt}</div>"
+
+        documento_impressao_html = f"""
+        <div class="print-container-root">
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th>DATA</th>
+                        <th>NOME DO PACIENTE</th>
+                        <th>PROCEDIMENTO</th>
+                        <th style="text-align: right;">VALOR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {linhas_print_html}
+                </tbody>
+            </table>
+            <div class="summary-box-print">
+                <strong>RESUMO DE FECHAMENTO MENSAL</strong><br>
+                • <strong>TOTAL DE PACIENTES ATENDIDOS:</strong> {total_pacientes} Pacientes<br><br>
+                <strong>Detalhamento de Procedimentos Realizados:</strong><br>
+                {detalhes_print_html}
+                <div class="total-banner-print">
+                    VALOR TOTAL A RECEBER: {val_total_fmt}
+                </div>
+            </div>
+        </div>
+        """
+
         st.markdown("---")
         col_btn1, col_btn2 = st.columns([1, 1])
         
         with col_btn1:
-            # Componente de Impressão Direta usando Comunicação JavaScript com a Janela Pai
-            st.components.v1.html(
-                """
-                <button onclick="window.parent.print()" style="
-                    background-color: #28a745;
-                    color: white;
-                    border: none;
-                    padding: 12px 20px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    width: 100%;">
-                    🖨️ IMPRIMIR EM PAPEL TIMBRADO
-                </button>
-                """,
-                height=60
-            )
+            # Componente JS que injeta o HTML da tabela no corpo nativo e chama a impressão sem cabeçalhos web
+            js_code = f"""
+            <button onclick="imprimirPapelTimbrado()" style="
+                background-color: #28a745; color: white; border: none;
+                padding: 12px 20px; font-size: 16px; font-weight: bold;
+                border-radius: 5px; cursor: pointer; width: 100%;">
+                🖨️ IMPRIMIR EM PAPEL TIMBRADO
+            </button>
+            <script>
+            function imprimirPapelTimbrado() {{
+                const docHTML = {json.dumps(documento_impressao_html)};
+                
+                // Remove container de impressão anterior se existir
+                const oldContainer = window.parent.document.querySelector('.print-container-root');
+                if (oldContainer) oldContainer.remove();
+                
+                // Cria e insere o container na raiz do documento pai
+                const container = window.parent.document.createElement('div');
+                container.innerHTML = docHTML;
+                window.parent.document.body.appendChild(container.firstElementChild);
+                
+                // Dispara a janela de impressão
+                setTimeout(() => {{
+                    window.parent.print();
+                }}, 100);
+            }}
+            </script>
+            """
+            st.components.v1.html(js_code, height=60)
             
         with col_btn2:
             buffer = io.BytesIO()
@@ -323,7 +366,7 @@ with tab2:
         st.markdown("---")
         
         # ---------------------------------------------------------
-        # VISUALIZAÇÃO NA TELA E IMPRESSÃO
+        # VISUALIZAÇÃO NA TELA
         # ---------------------------------------------------------
         st.subheader("📄 Visualização do Relatório Mensal")
         
@@ -343,51 +386,8 @@ with tab2:
                 val_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 st.write(f"• **{qtd}x** {proc_nome}: **{val_fmt}**")
 
-        val_total_fmt = f"R$ {valor_total_geral:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         st.markdown(f'<div class="total-banner">VALOR TOTAL A RECEBER: {val_total_fmt}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-
-        # ---------------------------------------------------------
-        # ESTRUTURA EXCLUSIVA PARA A IMPRESSÃO (Nativa HTML)
-        # ---------------------------------------------------------
-        linhas_html = ""
-        for _, row in df_final.iterrows():
-            v_fmt = f"R$ {row['VALOR']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            linhas_html += f"<tr><td>{row['DATA']}</td><td>{row['NOME DO PACIENTE']}</td><td>{row['PROCEDIMENTO']}</td><td style='text-align: right;'>{v_fmt}</td></tr>"
-
-        detalhes_html = ""
-        for proc_nome, qtd in contagem_procs.items():
-            val_subtotal = soma_procs[proc_nome]
-            v_sub_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            detalhes_html += f"<div>• <strong>{qtd}x</strong> {proc_nome}: {v_sub_fmt}</div>"
-
-        html_print = f"""
-        <div class="print-area">
-            <table class="print-table">
-                <thead>
-                    <tr>
-                        <th>DATA</th>
-                        <th>NOME DO PACIENTE</th>
-                        <th>PROCEDIMENTO</th>
-                        <th style="text-align: right;">VALOR</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {linhas_html}
-                </tbody>
-            </table>
-            <div class="summary-box-print">
-                <strong>RESUMO DE FECHAMENTO MENSAL</strong><br>
-                • <strong>TOTAL DE PACIENTES ATENDIDOS:</strong> {total_pacientes} Pacientes<br><br>
-                <strong>Detalhamento de Procedimentos Realizados:</strong><br>
-                {detalhes_html}
-                <div class="total-banner-print">
-                    VALOR TOTAL A RECEBER: {val_total_fmt}
-                </div>
-            </div>
-        </div>
-        """
-        st.markdown(html_print, unsafe_allow_html=True)
 
     else:
         st.info("Nenhum atendimento cadastrado até o momento.")
