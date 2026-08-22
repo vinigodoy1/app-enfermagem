@@ -125,7 +125,7 @@ st.markdown("""
                 padding-top: 1.2cm !important; padding-bottom: 1.2cm !important;
                 padding-left: 1.3cm !important; padding-right: 1.3cm !important;
             }
-            .header-timbrado { display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid #0056b3 !important; padding-bottom: 10px !important; margin-bottom: 15px !important; }
+            .header-timbrado { display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid #0056b3 !important; padding-bottom: 10px !important; margin-bottom: 20px !important; }
             .header-timbrado img { max-height: 130px !important; }
             .header-info { text-align: right !important; font-family: Arial, sans-serif !important; font-size: 8.5pt !important; color: #333 !important; line-height: 1.3 !important; }
             .header-info strong { font-size: 10.5pt !important; color: #000 !important; }
@@ -260,7 +260,7 @@ with tab1:
     if relatorio_id_atual == -1:
         st.info("💡 Crie um novo relatório para começar a cadastrar os atendimentos.")
         with st.form("form_novo_relatorio"):
-            novo_nome = st.text_input("Nome do Relatório (ex: Fechamento Oftalmologia)")
+            novo_nome = st.text_input("Nome do Relatório", value="Fechamento Oftalmologia")
             novo_municipio = st.text_input("Município / Prefeitura")
             novo_mes_ano = st.text_input("Mês/Ano (ex: 04/2026)", datetime.now().strftime("%m/%Y"))
             
@@ -391,16 +391,12 @@ with tab2:
                     </div>
                     <div class="header-info">
                         <strong>Clínica e Cirurgia de Olhos Dr. Jorge Mendonça</strong><br>
+                        CNPJ: 03.445.853/0001-25<br>
                         Rua Caetano Paludetto, 120 - Chácara Peixe<br>
                         Santa Cruz do Rio Pardo - SP | CEP 18900-000<br>
                         📞 (14) 3372-7332 | 📱 WhatsApp: (14) 99642-7332<br>
                         ✉️ clinicadeolhosscrp@hotmail.com
                     </div>
-                </div>
-
-                <div style="margin-bottom: 15px; font-family: Arial, sans-serif;">
-                    <h3 style="margin: 0; font-size: 13pt; color: #0056b3;">{nome_rel_atual.upper()}</h3>
-                    <div style="font-size: 10pt; color: #444;"><strong>Prefeitura / Município:</strong> {muni_rel_atual} | <strong>Mês/Ano:</strong> {mes_ano_rel_atual}</div>
                 </div>
 
                 <table class="print-table">
