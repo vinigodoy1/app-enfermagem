@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA E CSS DE IMPRESSÃO
 # ---------------------------------------------------------
-st.set_page_config(page_title="Gestão de Atendimentos", layout="wide")
+st.set_page_config(page_title="Relatório Mensal para Prefeituras", layout="wide")
 
 st.markdown("""
     <style>
@@ -30,19 +31,23 @@ st.markdown("""
 
         /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
         @media print {
-            /* Oculta menus, abas, botões, títulos e avisos do Streamlit */
+            /* Esconde toda a interface do Streamlit */
             header, footer, nav, button, .stButton, .stDownloadButton, 
             [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stTabs"], 
-            iframe, .stAppHeader, .stElementContainer:has(button), h1, h2, h3, .stMarkdown:has(h1) {
+            iframe, .stAppHeader, .stElementContainer, h1, h2, h3, .stMarkdown {
                 display: none !important;
-                visibility: hidden !important;
             }
 
-            html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
-                background: white !important;
-                color: black !important;
-                margin: 0 !important;
-                padding: 0 !important;
+            /* Força a visibilidade da área exclusiva de impressão */
+            .print-area, .print-area * {
+                display: block !important;
+                visibility: visible !important;
+            }
+
+            .print-area {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
                 width: 100% !important;
             }
 
@@ -54,43 +59,51 @@ st.markdown("""
                 margin-right: 1.3cm;
             }
 
-            .content-container {
-                display: block !important;
-                visibility: visible !important;
-                padding-top: 0.8cm;
-                padding-bottom: 0.8cm;
-            }
-
-            table {
+            table.print-table {
                 width: 100% !important;
                 border-collapse: collapse !important;
+                margin-bottom: 20cm;
             }
 
-            th, td {
+            table.print-table th, table.print-table td {
                 border-bottom: 1px solid #000 !important;
-                padding: 6px !important;
+                padding: 6px 8px !important;
                 font-size: 9.5pt !important;
                 color: #000 !important;
+                text-align: left !important;
             }
 
-            .summary-box {
+            table.print-table th {
+                background-color: #f0f0f0 !important;
+                font-weight: bold !important;
+            }
+
+            .summary-box-print {
                 border: 1px solid #000 !important;
+                padding: 10px !important;
+                margin-top: 15px !important;
                 background-color: #fff !important;
             }
 
-            .total-banner {
+            .total-banner-print {
                 background-color: #f0f0f0 !important;
                 color: #000 !important;
                 border: 1px solid #000 !important;
+                padding: 8px !important;
+                font-weight: bold !important;
+                text-align: right !important;
+                margin-top: 10px !important;
             }
         }
+
+        .print-area { display: none; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🩺 Gestão de Atendimentos de Enfermagem")
+st.title("📋 Relatório Mensal para Prefeituras")
 
 # ---------------------------------------------------------
-# BANCO DE DADOS EM MEMÓRIA
+# BANCO DE DADOS EM MEMÓRIA & HISTÓRICO
 # ---------------------------------------------------------
 if "procedimentos" not in st.session_state:
     st.session_state.procedimentos = {
@@ -103,6 +116,12 @@ if "procedimentos" not in st.session_state:
 if "atendimentos" not in st.session_state:
     st.session_state.atendimentos = []
 
+if "historico_atendimentos" not in st.session_state:
+    st.session_state.historico_atendimentos = []
+
+def salvar_estado_historico():
+    st.session_state.historico_atendimentos.append(list(st.session_state.atendimentos))
+
 # ---------------------------------------------------------
 # NAVEGAÇÃO POR ABAS
 # ---------------------------------------------------------
@@ -113,7 +132,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# ABA 1: LANÇAMENTO DA ENFERMEIRA
+# ABA 1: LANÇAMENTO DE ATENDIMENTOS
 # ---------------------------------------------------------
 with tab1:
     st.subheader("Registrar Atendimento do Paciente")
@@ -130,15 +149,23 @@ with tab1:
             procs_sel = st.multiselect(
                 "Selecione os Procedimentos:", 
                 options=opcoes,
-                format_func=lambda x: f"{x} - {st.session_state.procedimentos[x]['nome']} (R$ {st.session_state.procedimentos[x]['valor']:.2f})"
+                format_func=lambda x: f"{x} - {st.session_state.procedimentos[x]['nome']} (R$ {st.session_state.procedimentos[x]['valor']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + ")"
             )
 
         btn_salvar = st.form_submit_button("💾 Salvar Atendimento e Cadastrar Novo Paciente", type="primary", use_container_width=True)
+
+        # Verificação automática de duplicados em tempo real
+        if nome_paciente:
+            nome_limpo = nome_paciente.upper().strip()
+            nomes_existentes = [a["NOME DO PACIENTE"] for a in st.session_state.atendimentos]
+            if nome_limpo in nomes_existentes:
+                st.warning(f"⚠️ Atenção: O paciente **{nome_limpo}** já possui atendimento cadastrado neste mês.")
 
         if btn_salvar:
             if nome_paciente and procs_sel:
                 valor_total = sum(st.session_state.procedimentos[p]['valor'] for p in procs_sel)
                 
+                salvar_estado_historico()
                 st.session_state.atendimentos.append({
                     "DATA": data_atend.strftime("%d/%m/%Y"),
                     "NOME DO PACIENTE": nome_paciente.upper().strip(),
@@ -151,7 +178,7 @@ with tab1:
                 st.error("⚠️ Preencha o nome do paciente e selecione ao menos um procedimento.")
 
 # ---------------------------------------------------------
-# ABA 2: RELATÓRIO MENSAL, GERENCIAMENTO E EXPORTAÇÃO
+# ABA 2: RELATÓRIO MENSAL & IMPRESSÃO
 # ---------------------------------------------------------
 with tab2:
     st.subheader("Relatório Mensal de Atendimentos")
@@ -159,24 +186,36 @@ with tab2:
     if st.session_state.atendimentos:
         st.markdown("### ✏️ Tabela de Atendimentos (Edite ou Exclua Linhas)")
         
-        # Tabela editável vinculada diretamente aos dados da sessão
-        df_editor = pd.DataFrame(st.session_state.atendimentos)
+        # Cria cópia formatada com R$ para visualização
+        df_display = pd.DataFrame(st.session_state.atendimentos)
+        df_editor_input = df_display[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]].copy()
+        df_editor_input["VALOR_FORMATADO"] = df_editor_input["VALOR"].apply(lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
         
         df_atualizado = st.data_editor(
-            df_editor[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]],
+            df_editor_input[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]],
             num_rows="dynamic",
             use_container_width=True,
             key="editor_atendimentos"
         )
         
-        # Botão para sincronizar exclusões realizadas na tabela
-        if st.button("🔄 Confirmar Alterações e Exclusões", type="primary"):
-            st.session_state.atendimentos = df_atualizado.to_dict("records")
-            st.success("Tabela e totais atualizados!")
-            st.rerun()
+        col_conf, col_desf = st.columns([1, 1])
+        with col_conf:
+            if st.button("🔄 Confirmar Alterações e Exclusões", type="primary", use_container_width=True):
+                salvar_estado_historico()
+                st.session_state.atendimentos = df_atualizado.to_dict("records")
+                st.success("Tabela atualizada!")
+                st.rerun()
 
-        # Recálculo instantâneo dos dados baseados na tabela editada
-        df_final = df_atualizado
+        with col_desf:
+            if st.button("↩️ Desfazer Última Alteração", use_container_width=True):
+                if st.session_state.historico_atendimentos:
+                    st.session_state.atendimentos = st.session_state.historico_atendimentos.pop()
+                    st.success("Última alteração desfeita com sucesso!")
+                    st.rerun()
+                else:
+                    st.info("Nenhuma alteração anterior para desfazer.")
+
+        df_final = pd.DataFrame(st.session_state.atendimentos)
         total_pacientes = len(df_final)
         valor_total_geral = df_final["VALOR"].sum() if not df_final.empty else 0.0
         
@@ -200,51 +239,82 @@ with tab2:
         col_btn1, col_btn2 = st.columns([1, 1])
         
         with col_btn1:
-            # Botão de Impressão Direta usando HTML nativo
             st.markdown("""
                 <button onclick="window.print()" style="
-                    background-color: #28a745;
-                    color: white;
-                    border: none;
-                    padding: 12px 20px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    width: 100%;">
+                    background-color: #28a745; color: white; border: none;
+                    padding: 12px 20px; font-size: 16px; font-weight: bold;
+                    border-radius: 5px; cursor: pointer; width: 100%;">
                     🖨️ IMPRIMIR EM PAPEL TIMBRADO
                 </button>
             """, unsafe_allow_html=True)
             
         with col_btn2:
-            # Geração da Planilha Excel COM OS ATENDIMENTOS E TOTAIS ATUALIZADOS
+            # Gerador Excel (.xlsx) Formatado
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                # 1. Tabela Principal Atualizada
-                df_final.to_excel(writer, index=False, sheet_name='Relatorio_Mensal', startrow=0)
+                df_excel = df_final[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]].copy()
+                df_excel.to_excel(writer, index=False, sheet_name='Relatorio_Mensal', startrow=0)
                 
-                # 2. Inserção do Resumo e Totais na Planilha
                 sheet = writer.sheets['Relatorio_Mensal']
-                start_row = len(df_final) + 3
                 
-                sheet.cell(row=start_row, column=1, value="--- RESUMO DE FECHAMENTO MENSAL ---")
-                sheet.cell(row=start_row+1, column=1, value="TOTAL DE PACIENTES:")
+                # Estilos OpenPyXL
+                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                bold_font = Font(name="Calibri", size=11, bold=True)
+                thin_border = Border(
+                    left=Side(style='thin', color='D9D9D9'),
+                    right=Side(style='thin', color='D9D9D9'),
+                    top=Side(style='thin', color='D9D9D9'),
+                    bottom=Side(style='thin', color='D9D9D9')
+                )
+
+                # Formatação do Cabeçalho
+                for col_num in range(1, 5):
+                    cell = sheet.cell(row=1, column=col_num)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center" if col_num in [1, 4] else "left", vertical="center")
+
+                # Formatação das Linhas de Dados
+                for row_num in range(2, len(df_excel) + 2):
+                    for col_num in range(1, 5):
+                        cell = sheet.cell(row=row_num, column=col_num)
+                        cell.border = thin_border
+                        if col_num == 4:
+                            cell.number_format = 'R$ #,##0.00'
+                            cell.alignment = Alignment(horizontal="right")
+                        elif col_num == 1:
+                            cell.alignment = Alignment(horizontal="center")
+
+                # Adição do Resumo
+                start_row = len(df_excel) + 3
+                sheet.cell(row=start_row, column=1, value="RESUMO DE FECHAMENTO MENSAL").font = bold_font
+                sheet.cell(row=start_row+1, column=1, value="TOTAL DE PACIENTES:").font = bold_font
                 sheet.cell(row=start_row+1, column=2, value=f"{total_pacientes} Pacientes")
                 
                 current_r = start_row + 2
                 for proc_nome, qtd in contagem_procs.items():
                     val_subtotal = soma_procs[proc_nome]
                     sheet.cell(row=current_r, column=1, value=f"{qtd}x {proc_nome}:")
-                    sheet.cell(row=current_r, column=2, value=val_subtotal)
+                    c_val = sheet.cell(row=current_r, column=2, value=val_subtotal)
+                    c_val.number_format = 'R$ #,##0.00'
                     current_r += 1
                 
-                sheet.cell(row=current_r+1, column=1, value="VALOR TOTAL A RECEBER:")
-                sheet.cell(row=current_r+1, column=2, value=valor_total_geral)
+                sheet.cell(row=current_r+1, column=1, value="VALOR TOTAL A RECEBER:").font = bold_font
+                c_tot = sheet.cell(row=current_r+1, column=2, value=valor_total_geral)
+                c_tot.font = bold_font
+                c_tot.number_format = 'R$ #,##0.00'
+
+                # Ajuste de Largura Automático das Colunas
+                for col in sheet.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    col_letter = col[0].column_letter
+                    sheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
                 
             buffer.seek(0)
             
             st.download_button(
-                label="📊 BAIXAR TABELA ATUALIZADA EM EXCEL (.XLSX)",
+                label="📊 BAIXAR PLANILHA FORMATADA EM EXCEL (.XLSX)",
                 data=buffer,
                 file_name=f"relatorio_atendimentos_{datetime.now().strftime('%m_%Y')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -254,13 +324,14 @@ with tab2:
         st.markdown("---")
         
         # ---------------------------------------------------------
-        # EXIBIÇÃO NO APP E ÁREA DE IMPRESSÃO
+        # VISUALIZAÇÃO NA TELA E IMPRESSÃO
         # ---------------------------------------------------------
-        st.markdown('<div class="content-container">', unsafe_allow_html=True)
         st.subheader("📄 Visualização do Relatório Mensal")
         
-        # Exibe a tabela formatada no app e na impressão
-        st.table(df_final)
+        # Tabela na tela com formatação R$
+        df_screen = df_final[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]].copy()
+        df_screen["VALOR"] = df_screen["VALOR"].apply(lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        st.table(df_screen)
 
         # Quadro de Resumo
         st.markdown('<div class="summary-box">', unsafe_allow_html=True)
@@ -272,11 +343,54 @@ with tab2:
         if contagem_procs:
             for proc_nome, qtd in contagem_procs.items():
                 val_subtotal = soma_procs[proc_nome]
-                st.write(f"• **{qtd}x** {proc_nome}: **R$ {val_subtotal:.2f}**")
+                val_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                st.write(f"• **{qtd}x** {proc_nome}: **{val_fmt}**")
 
-        st.markdown(f'<div class="total-banner">VALOR TOTAL A RECEBER: R$ {valor_total_geral:.2f}</div>', unsafe_allow_html=True)
+        val_total_fmt = f"R$ {valor_total_geral:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        st.markdown(f'<div class="total-banner">VALOR TOTAL A RECEBER: {val_total_fmt}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ---------------------------------------------------------
+        # ESTRUTURA EXCLUSIVA PARA A IMPRESSÃO (Nativa HTML)
+        # ---------------------------------------------------------
+        linhas_html = ""
+        for _, row in df_final.iterrows():
+            v_fmt = f"R$ {row['VALOR']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            linhas_html += f"<tr><td>{row['DATA']}</td><td>{row['NOME DO PACIENTE']}</td><td>{row['PROCEDIMENTO']}</td><td style='text-align: right;'>{v_fmt}</td></tr>"
+
+        detalhes_html = ""
+        for proc_nome, qtd in contagem_procs.items():
+            val_subtotal = soma_procs[proc_nome]
+            v_sub_fmt = f"R$ {val_subtotal:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            detalhes_html += f"<div>• <strong>{qtd}x</strong> {proc_nome}: {v_sub_fmt}</div>"
+
+        html_print = f"""
+        <div class="print-area">
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th>DATA</th>
+                        <th>NOME DO PACIENTE</th>
+                        <th>PROCEDIMENTO</th>
+                        <th style="text-align: right;">VALOR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {linhas_html}
+                </tbody>
+            </table>
+            <div class="summary-box-print">
+                <strong>RESUMO DE FECHAMENTO MENSAL</strong><br>
+                • <strong>TOTAL DE PACIENTES ATENDIDOS:</strong> {total_pacientes} Pacientes<br><br>
+                <strong>Detalhamento de Procedimentos Realizados:</strong><br>
+                {detalhes_html}
+                <div class="total-banner-print">
+                    VALOR TOTAL A RECEBER: {val_total_fmt}
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(html_print, unsafe_allow_html=True)
 
     else:
         st.info("Nenhum atendimento cadastrado até o momento.")
@@ -302,4 +416,5 @@ with tab3:
     st.markdown("### Tabela de Preços Atual")
     df_precos = pd.DataFrame.from_dict(st.session_state.procedimentos, orient='index')
     df_precos.columns = ["Nome do Procedimento", "Valor (R$)"]
+    df_precos["Valor (R$)"] = df_precos["Valor (R$)"].apply(lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
     st.table(df_precos)
