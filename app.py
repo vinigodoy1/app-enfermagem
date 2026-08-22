@@ -110,7 +110,7 @@ def verificar_senha(senha_digitada):
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA E CSS
 # ---------------------------------------------------------
-st.set_page_config(page_title="APP - Relatório Mensal Prefeituras", layout="wide")
+st.set_page_config(page_title="Relatório Mensal para Prefeituras", layout="wide")
 
 st.markdown("""
     <style>
@@ -173,12 +173,7 @@ if not st.session_state.autenticado:
 # ---------------------------------------------------------
 # SISTEMA AUTENTICADO
 # ---------------------------------------------------------
-col_h1, col_h2 = st.columns([1, 3])
-with col_h1:
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=280)
-with col_h2:
-    st.title("📋 Relatório Mensal para Prefeituras")
+st.title("📋 Relatório Mensal para Prefeituras")
 
 if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
     st.session_state.autenticado = False
