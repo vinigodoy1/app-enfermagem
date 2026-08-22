@@ -11,15 +11,17 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # CONFIGURAÇÃO DE BANCO DE DADOS & SENHAS
 # ---------------------------------------------------------
 DB_FILE = "banco_prefeituras.db"
-HASH_SENHA_MESTRA = "f86bebf436c6ad97c9b20755ecfb8a9d020d5884c9809087c536c073a4661858"
+# Hash SHA-256 EXATO da Senha Mestra: vi753951
+HASH_SENHA_MESTRA = "288e5b1e88621463b8fba4c50b3081d02801fba46012f97e02533636757963ee"
 
 def hash_senha(senha):
-    return hashlib.sha256(senha.encode('utf-8')).hexdigest()
+    return hashlib.sha256(senha.strip().encode('utf-8')).hexdigest()
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
+    # Tabela de Configurações / Senha do Usuário
     c.execute("""
         CREATE TABLE IF NOT EXISTS config (
             chave TEXT PRIMARY KEY,
@@ -27,10 +29,12 @@ def init_db():
         )
     """)
     
+    # Define senha padrão do usuário '1234' se não existir
     c.execute("SELECT COUNT(*) FROM config WHERE chave = 'senha_admin'")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO config VALUES ('senha_admin', ?)", (hash_senha("1234"),))
 
+    # Tabela de Procedimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS procedimentos (
             sigla TEXT PRIMARY KEY,
@@ -49,6 +53,7 @@ def init_db():
         ]
         c.executemany("INSERT INTO procedimentos VALUES (?, ?, ?)", procs_iniciais)
 
+    # Tabela de Relatórios
     c.execute("""
         CREATE TABLE IF NOT EXISTS relatorios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +64,7 @@ def init_db():
         )
     """)
 
+    # Tabela de Atendimentos
     c.execute("""
         CREATE TABLE IF NOT EXISTS atendimentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,14 +92,19 @@ def run_query(query, params=(), fetchall=True):
     return res
 
 def verificar_senha(senha_digitada):
+    if not senha_digitada:
+        return False
+    
     hash_digitado = hash_senha(senha_digitada)
+    # Valida tanto a senha mestra quanto a senha do usuário
     if hash_digitado == HASH_SENHA_MESTRA:
         return True
+        
     senha_salva = run_query("SELECT valor FROM config WHERE chave = 'senha_admin'")[0][0]
     return hash_digitado == senha_salva
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PÁGINA E CSS
+# CONFIGURAÇÃO DE PÁGINA E CSS DE IMPRESSÃO
 # ---------------------------------------------------------
 st.set_page_config(page_title="Relatório Mensal para Prefeituras", layout="wide")
 
@@ -149,7 +160,6 @@ if not st.session_state.autenticado:
 # ---------------------------------------------------------
 st.title("📋 Relatório Mensal para Prefeituras")
 
-# Botão de Logout na Barra Lateral
 if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
     st.session_state.autenticado = False
     st.rerun()
@@ -212,11 +222,9 @@ if relatorio_id_atual != -1:
             else:
                 st.error("Senha incorreta!")
 
-# Obtém procedimentos cadastrados
 procs_raw = run_query("SELECT sigla, nome, valor FROM procedimentos")
 procedimentos_dict = {p[0]: {"nome": p[1], "valor": p[2]} for p in procs_raw}
 
-# Estrutura principal de abas
 tab1, tab2, tab3, tab4 = st.tabs([
     "📋 Novo Atendimento", 
     "🖨️ Relatório Mensal & Impressão", 
