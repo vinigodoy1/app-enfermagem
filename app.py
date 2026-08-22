@@ -110,7 +110,7 @@ def verificar_senha(senha_digitada):
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA E CSS
 # ---------------------------------------------------------
-st.set_page_config(page_title="Relatório Mensal para Prefeituras", layout="wide")
+st.set_page_config(page_title="APP - Relatório Mensal Prefeituras", layout="wide")
 
 st.markdown("""
     <style>
