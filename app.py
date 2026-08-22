@@ -140,26 +140,9 @@ opcoes_rel["➕ Criar Novo Relatório"] = (-1, "Novo")
 relatorio_selecionado = st.sidebar.selectbox("Selecione o Relatório Ativo:", options=list(opcoes_rel.keys()))
 relatorio_id_atual, status_atual = opcoes_rel[relatorio_selecionado]
 
-# Criar Novo Relatório
-if relatorio_id_atual == -1:
-    st.info("💡 Crie um novo relatório para começar a cadastrar os atendimentos.")
-    with st.form("form_novo_relatorio"):
-        novo_nome = st.text_input("Nome do Relatório (ex: Fechamento Oftalmologia)")
-        novo_municipio = st.text_input("Município / Prefeitura")
-        novo_mes_ano = st.text_input("Mês/Ano (ex: 04/2026)", datetime.now().strftime("%m/%Y"))
-        
-        if st.form_submit_button("➕ Criar e Ativar Relatório", type="primary"):
-            if novo_nome and novo_municipio and novo_mes_ano:
-                run_query("INSERT INTO relatorios (nome, municipio, mes_ano) VALUES (?, ?, ?)", 
-                          (novo_nome.strip(), novo_municipio.strip(), novo_mes_ano.strip()), fetchall=False)
-                st.success("Relatório criado com sucesso!")
-                st.rerun()
-            else:
-                st.warning("Preencha todos os campos do relatório.")
-else:
-    # Travar / Reabrir / Excluir Relatórios com Senha
+# Travar / Reabrir / Excluir Relatórios com Senha na Barra Lateral (se houver relatório selecionado)
+if relatorio_id_atual != -1:
     st.sidebar.markdown("---")
-    
     if status_atual == "Em Aberto":
         if st.sidebar.button("🔒 Finalizar e Travar Relatório", type="primary", use_container_width=True):
             procs_raw = run_query("SELECT sigla, valor FROM procedimentos")
@@ -196,63 +179,82 @@ else:
             else:
                 st.error("Senha incorreta!")
 
-    # Obtém dados atualizados dos procedimentos
-    procs_raw = run_query("SELECT sigla, nome, valor FROM procedimentos")
-    procedimentos_dict = {p[0]: {"nome": p[1], "valor": p[2]} for p in procs_raw}
+# Obtém dados atualizados dos procedimentos
+procs_raw = run_query("SELECT sigla, nome, valor FROM procedimentos")
+procedimentos_dict = {p[0]: {"nome": p[1], "valor": p[2]} for p in procs_raw}
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📋 Novo Atendimento", 
-        "🖨️ Relatório Mensal & Impressão", 
-        "⚙️ Alterar / Cadastrar Preços",
-        "🔑 Seguranças e Senhas"
-    ])
+# Estrutura principal de abas (SEMPRE VISÍVEIS)
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📋 Novo Atendimento", 
+    "🖨️ Relatório Mensal & Impressão", 
+    "⚙️ Alterar / Cadastrar Preços",
+    "🔑 Seguranças e Senhas"
+])
 
-    # ---------------------------------------------------------
-    # ABA 1: LANÇAMENTO DE ATENDIMENTOS
-    # ---------------------------------------------------------
-    with tab1:
-        st.subheader("Registrar Atendimento do Paciente")
-        
-        if status_atual == "Finalizado":
-            st.warning("🔒 Este relatório está finalizado. Digite a senha no menu lateral para reabri-lo.")
-        else:
-            with st.form("form_atendimento", clear_on_submit=True):
-                col1, col2 = st.columns([1, 2])
-                
-                with col1:
-                    data_atend = st.date_input("Data do Atendimento", datetime.now())
-                    nome_paciente = st.text_input("Nome do Paciente")
-                
-                with col2:
-                    opcoes = list(procedimentos_dict.keys())
-                    procs_sel = st.multiselect(
-                        "Selecione os Procedimentos:", 
-                        options=opcoes,
-                        format_func=lambda x: f"{x} - {procedimentos_dict[x]['nome']} (R$ {procedimentos_dict[x]['valor']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + ")"
-                    )
+# ---------------------------------------------------------
+# ABA 1: LANÇAMENTO DE ATENDIMENTOS
+# ---------------------------------------------------------
+with tab1:
+    st.subheader("Registrar Atendimento do Paciente")
+    
+    if relatorio_id_atual == -1:
+        st.info("💡 Crie um novo relatório na caixa abaixo para começar a cadastrar os atendimentos.")
+        with st.form("form_novo_relatorio"):
+            novo_nome = st.text_input("Nome do Relatório (ex: Fechamento Oftalmologia)")
+            novo_municipio = st.text_input("Município / Prefeitura")
+            novo_mes_ano = st.text_input("Mês/Ano (ex: 04/2026)", datetime.now().strftime("%m/%Y"))
+            
+            if st.form_submit_button("➕ Criar e Ativar Relatório", type="primary"):
+                if novo_nome and novo_municipio and novo_mes_ano:
+                    run_query("INSERT INTO relatorios (nome, municipio, mes_ano) VALUES (?, ?, ?)", 
+                              (novo_nome.strip(), novo_municipio.strip(), novo_mes_ano.strip()), fetchall=False)
+                    st.success("Relatório criado com sucesso!")
+                    st.rerun()
+                else:
+                    st.warning("Preencha todos os campos do relatório.")
+    elif status_atual == "Finalizado":
+        st.warning("🔒 Este relatório está finalizado. Digite a senha no menu lateral para reabri-lo.")
+    else:
+        with st.form("form_atendimento", clear_on_submit=True):
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                data_atend = st.date_input("Data do Atendimento", datetime.now())
+                nome_paciente = st.text_input("Nome do Paciente")
+            
+            with col2:
+                opcoes = list(procedimentos_dict.keys())
+                procs_sel = st.multiselect(
+                    "Selecione os Procedimentos:", 
+                    options=opcoes,
+                    format_func=lambda x: f"{x} - {procedimentos_dict[x]['nome']} (R$ {procedimentos_dict[x]['valor']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + ")"
+                )
 
-                btn_salvar = st.form_submit_button("💾 Salvar Atendimento", type="primary", use_container_width=True)
+            btn_salvar = st.form_submit_button("💾 Salvar Atendimento", type="primary", use_container_width=True)
 
-                if nome_paciente:
-                    nome_limpo = nome_paciente.upper().strip()
-                    existentes = run_query("SELECT paciente FROM atendimentos WHERE relatorio_id = ? AND paciente = ?", (relatorio_id_atual, nome_limpo))
-                    if existentes:
-                        st.warning(f"⚠️ Atenção: O paciente **{nome_limpo}** já possui atendimento neste relatório.")
+            if nome_paciente:
+                nome_limpo = nome_paciente.upper().strip()
+                existentes = run_query("SELECT paciente FROM atendimentos WHERE relatorio_id = ? AND paciente = ?", (relatorio_id_atual, nome_limpo))
+                if existentes:
+                    st.warning(f"⚠️ Atenção: O paciente **{nome_limpo}** já possui atendimento neste relatório.")
 
-                if btn_salvar:
-                    if nome_paciente and procs_sel:
-                        run_query("INSERT INTO atendimentos (relatorio_id, data, paciente, procedimentos) VALUES (?, ?, ?, ?)",
-                                  (relatorio_id_atual, data_atend.strftime("%d/%m/%Y"), nome_paciente.upper().strip(), "/".join(procs_sel)), fetchall=False)
-                        st.success(f"✅ Atendimento de **{nome_paciente.upper()}** registrado com sucesso!")
-                    else:
-                        st.error("⚠️ Preencha o nome do paciente e selecione ao menos um procedimento.")
+            if btn_salvar:
+                if nome_paciente and procs_sel:
+                    run_query("INSERT INTO atendimentos (relatorio_id, data, paciente, procedimentos) VALUES (?, ?, ?, ?)",
+                              (relatorio_id_atual, data_atend.strftime("%d/%m/%Y"), nome_paciente.upper().strip(), "/".join(procs_sel)), fetchall=False)
+                    st.success(f"✅ Atendimento de **{nome_paciente.upper()}** registrado com sucesso!")
+                else:
+                    st.error("⚠️ Preencha o nome do paciente e selecione ao menos um procedimento.")
 
-    # ---------------------------------------------------------
-    # ABA 2: RELATÓRIO MENSAL & IMPRESSÃO
-    # ---------------------------------------------------------
-    with tab2:
-        st.subheader("Relatório Mensal de Atendimentos")
-        
+# ---------------------------------------------------------
+# ABA 2: RELATÓRIO MENSAL & IMPRESSÃO
+# ---------------------------------------------------------
+with tab2:
+    st.subheader("Relatório Mensal de Atendimentos")
+    
+    if relatorio_id_atual == -1:
+        st.info("💡 Selecione um relatório criado na barra lateral ou crie um novo para visualizar o extrato.")
+    else:
         atendimentos_raw = run_query("SELECT id, data, paciente, procedimentos, valor_historico FROM atendimentos WHERE relatorio_id = ?", (relatorio_id_atual,))
         
         if atendimentos_raw:
@@ -453,48 +455,48 @@ else:
         else:
             st.info("Nenhum atendimento cadastrado para este relatório até o momento.")
 
-    # ---------------------------------------------------------
-    # ABA 3: ADMINISTRAÇÃO DE PREÇOS E CADASTRO
-    # ---------------------------------------------------------
-    with tab3:
-        st.subheader("Cadastrar / Alterar Procedimentos")
+# ---------------------------------------------------------
+# ABA 3: ADMINISTRAÇÃO DE PREÇOS E CADASTRO
+# ---------------------------------------------------------
+with tab3:
+    st.subheader("Cadastrar / Alterar Procedimentos")
+    
+    with st.form("form_proc"):
+        sigla_in = st.text_input("Sigla do Procedimento (ex: CONS, TON, PA)").upper().strip()
+        nome_in = st.text_input("Nome Completo do Procedimento")
+        valor_in = st.number_input("Valor Unitário (R$)", min_value=0.0, step=1.0)
         
-        with st.form("form_proc"):
-            sigla_in = st.text_input("Sigla do Procedimento (ex: CONS, TON, PA)").upper().strip()
-            nome_in = st.text_input("Nome Completo do Procedimento")
-            valor_in = st.number_input("Valor Unitário (R$)", min_value=0.0, step=1.0)
-            
-            if st.form_submit_button("💾 Salvar Procedimento"):
-                if sigla_in and nome_in:
-                    run_query("INSERT OR REPLACE INTO procedimentos (sigla, nome, valor) VALUES (?, ?, ?)",
-                              (sigla_in, nome_in, valor_in), fetchall=False)
-                    st.success(f"Procedimento **{sigla_in}** cadastrado/atualizado com sucesso!")
-                    st.rerun()
-                else:
-                    st.warning("Preencha a sigla e o nome do procedimento.")
+        if st.form_submit_button("💾 Salvar Procedimento"):
+            if sigla_in and nome_in:
+                run_query("INSERT OR REPLACE INTO procedimentos (sigla, nome, valor) VALUES (?, ?, ?)",
+                          (sigla_in, nome_in, valor_in), fetchall=False)
+                st.success(f"Procedimento **{sigla_in}** cadastrado/atualizado com sucesso!")
+                st.rerun()
+            else:
+                st.warning("Preencha a sigla e o nome do procedimento.")
 
-        st.markdown("### Tabela de Preços Atual")
-        df_precos = pd.DataFrame(run_query("SELECT sigla, nome, valor FROM procedimentos"), columns=["Sigla", "Nome do Procedimento", "Valor (R$)"])
-        df_precos["Valor (R$)"] = df_precos["Valor (R$)"].apply(lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
-        st.table(df_precos)
+    st.markdown("### Tabela de Preços Atual")
+    df_precos = pd.DataFrame(run_query("SELECT sigla, nome, valor FROM procedimentos"), columns=["Sigla", "Nome do Procedimento", "Valor (R$)"])
+    df_precos["Valor (R$)"] = df_precos["Valor (R$)"].apply(lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+    st.table(df_precos)
 
-    # ---------------------------------------------------------
-    # ABA 4: ALTERAÇÃO DE SENHA DO ADMINISTRADOR
-    # ---------------------------------------------------------
-    with tab4:
-        st.subheader("🔑 Alterar Senha de Segurança")
+# ---------------------------------------------------------
+# ABA 4: ALTERAÇÃO DE SENHA DO ADMINISTRADOR
+# ---------------------------------------------------------
+with tab4:
+    st.subheader("🔑 Alterar Senha de Segurança")
+    
+    with st.form("form_alterar_senha"):
+        senha_atual_in = st.text_input("Digite a Senha Atual:", type="password")
+        nova_senha_in = st.text_input("Digite a Nova Senha:", type="password")
+        confirma_senha_in = st.text_input("Confirme a Nova Senha:", type="password")
         
-        with st.form("form_alterar_senha"):
-            senha_atual_in = st.text_input("Digite a Senha Atual:", type="password")
-            nova_senha_in = st.text_input("Digite a Nova Senha:", type="password")
-            confirma_senha_in = st.text_input("Confirme a Nova Senha:", type="password")
-            
-            if st.form_submit_button("💾 Atualizar Senha", type="primary"):
-                if verificar_senha(senha_atual_in):
-                    if nova_senha_in and nova_senha_in == confirma_senha_in:
-                        run_query("UPDATE config SET valor = ? WHERE chave = 'senha_admin'", (hash_senha(nova_senha_in),), fetchall=False)
-                        st.success("✅ Senha alterada com sucesso!")
-                    else:
-                        st.error("⚠️ A nova senha e a confirmação não coincidem ou estão em branco.")
+        if st.form_submit_button("💾 Atualizar Senha", type="primary"):
+            if verificar_senha(senha_atual_in):
+                if nova_senha_in and nova_senha_in == confirma_senha_in:
+                    run_query("UPDATE config SET valor = ? WHERE chave = 'senha_admin'", (hash_senha(nova_senha_in),), fetchall=False)
+                    st.success("✅ Senha alterada com sucesso!")
                 else:
-                    st.error("❌ A senha atual informada está incorreta.")
+                    st.error("⚠️ A nova senha e a confirmação não coincidem ou estão em branco.")
+            else:
+                st.error("❌ A senha atual informada está incorreta.")
