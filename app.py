@@ -30,24 +30,28 @@ st.markdown("""
             text-align: right;
         }
 
-        /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL) */
+        /* REGRAS RÍGIDAS DE IMPRESSÃO EM PAPEL TIMBRADO (A4 VERTICAL SEM CABEÇALHOS DA WEB) */
         @media print {
-            /* Oculta tudo que pertence ao Streamlit */
+            /* Remove cabeçalhos, rodapés, URLs e datas inseridos automaticamente pelo navegador */
+            @page {
+                size: A4 portrait;
+                margin: 0; /* Zera a margem do papel para ocultar cabeçalho/rodapé do navegador */
+            }
+
+            /* Esconde toda a interface web do Streamlit */
             body > div:not(.print-container-root) {
                 display: none !important;
             }
 
+            /* Aplica as margens solicitadas diretamente na área do relatório */
             .print-container-root {
                 display: block !important;
                 width: 100% !important;
-            }
-
-            @page {
-                size: A4 portrait;
-                margin-top: 2.0cm;
-                margin-bottom: 2.0cm;
-                margin-left: 1.3cm;
-                margin-right: 1.3cm;
+                box-sizing: border-box !important;
+                padding-top: 2.0cm !important;    /* Margem Superior */
+                padding-bottom: 2.0cm !important; /* Margem Inferior */
+                padding-left: 1.3cm !important;   /* Margem Esquerda */
+                padding-right: 1.3cm !important;  /* Margem Direita */
             }
 
             table.print-table {
@@ -186,7 +190,6 @@ with tab2:
                     st.success("Ação desfeita!")
                     st.rerun()
 
-        # Tabela editável com sincronização automática
         df_editor_input = pd.DataFrame(st.session_state.atendimentos)[["DATA", "NOME DO PACIENTE", "PROCEDIMENTO", "VALOR"]]
         
         df_atualizado = st.data_editor(
@@ -221,7 +224,6 @@ with tab2:
                 contagem_procs[chave] = contagem_procs.get(chave, 0) + 1
                 soma_procs[chave] = soma_procs.get(chave, 0.0) + val
 
-        # Montagem do HTML limpo para a Impressão em Papel Timbrado
         val_total_fmt = f"R$ {valor_total_geral:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         
         linhas_print_html = ""
@@ -266,7 +268,6 @@ with tab2:
         col_btn1, col_btn2 = st.columns([1, 1])
         
         with col_btn1:
-            # Componente JS que injeta o HTML da tabela no corpo nativo e chama a impressão sem cabeçalhos web
             js_code = f"""
             <button onclick="imprimirPapelTimbrado()" style="
                 background-color: #28a745; color: white; border: none;
@@ -278,16 +279,13 @@ with tab2:
             function imprimirPapelTimbrado() {{
                 const docHTML = {json.dumps(documento_impressao_html)};
                 
-                // Remove container de impressão anterior se existir
                 const oldContainer = window.parent.document.querySelector('.print-container-root');
                 if (oldContainer) oldContainer.remove();
                 
-                // Cria e insere o container na raiz do documento pai
                 const container = window.parent.document.createElement('div');
                 container.innerHTML = docHTML;
                 window.parent.document.body.appendChild(container.firstElementChild);
                 
-                // Dispara a janela de impressão
                 setTimeout(() => {{
                     window.parent.print();
                 }}, 100);
